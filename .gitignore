@@ -1,0 +1,26 @@
+# Environment
+.env
+.env.local
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Alembic (миграции коммитим, а вот это — нет)
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+# Docker
+docker-compose.override.yml
