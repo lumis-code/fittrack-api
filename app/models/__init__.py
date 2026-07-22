@@ -3,7 +3,7 @@ from app.models.gym_set import GymSet
 from app.models.run_session import RunSession
 from app.models.swim_session import SwimSession
 from app.models.user import User
-from app.models.workout import Workout
+from app.models.workout import Workout, WorkoutType
 
 __all__ = [
     "AiInsight",
@@ -12,4 +12,5 @@ __all__ = [
     "SwimSession",
     "User",
     "Workout",
+    "WorkoutType",
 ]
