@@ -42,6 +42,16 @@ def create_user(user_data: UserCreate, db: Session = Depends(get_db)) -> User:
     return user
 
 
+@router.get("/telegram/{telegram_id}", response_model=UserResponse)
+def get_user_by_telegram_id(telegram_id: int, db: Session = Depends(get_db)) -> User:
+    """Look up a user by their Telegram ID."""
+
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not registered")
+    return user
+
+
 @router.get("/{user_id}", response_model=UserResponse)
 def get_user(user_id: int, db: Session = Depends(get_db)) -> User:
     """Fetch a single user by id."""
