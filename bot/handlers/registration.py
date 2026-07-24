@@ -46,7 +46,7 @@ async def handle_contact(message: Message, state: FSMContext) -> None:
         return
 
     username = message.from_user.username if message.from_user and message.from_user.username else (message.from_user.first_name if message.from_user else "user")
-    email = f"tg{telegram_id}@fittrack.local"
+    email = f"tg{telegram_id}@example.com"
 
     try:
         existing_user = await api_client.get_user_by_telegram_id(telegram_id)

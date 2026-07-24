@@ -21,7 +21,7 @@ class ApiClient:
     async def _request(self, method: str, path: str, *, json_body: dict[str, Any] | None = None, params: dict[str, Any] | None = None) -> Any:
         url = f"{self.base_url}{path}"
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                 response = await client.request(method, url, json=json_body, params=params)
         except httpx.TimeoutException as exc:
             raise ApiClientError(f"Request to {url} timed out") from exc
@@ -44,7 +44,7 @@ class ApiClient:
             "phone_number": phone_number,
             "telegram_id": telegram_id,
         }
-        return await self._request("POST", "/users", json_body=payload)
+        return await self._request("POST", "/users/", json_body=payload)
 
     async def get_user_by_telegram_id(self, telegram_id: int) -> dict[str, Any] | None:
         """Look up a registered user by telegram_id. Returns None if not found."""
@@ -56,10 +56,13 @@ class ApiClient:
             raise
 
     async def create_workout(self, *, workout_data: dict[str, Any]) -> dict[str, Any]:
-        return await self._request("POST", "/workouts", json_body=workout_data)
+        return await self._request("POST", "/workouts/", json_body=workout_data)
 
     async def get_user_stats(self, user_id: int) -> dict[str, Any]:
         return await self._request("GET", f"/users/{user_id}/stats")
+
+    async def get_recent_workouts(self, user_id: int, limit: int = 1) -> list[dict[str, Any]]:
+        return await self._request("GET", "/workouts/", params={"user_id": user_id, "limit": limit})
 
     async def analyze_workout(self, workout_id: int) -> dict[str, Any]:
         return await self._request("POST", f"/ai/analyze/{workout_id}")

@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 
 from bot.config import BOT_TOKEN
-from bot.handlers import menu, registration
+from bot.handlers import ai, menu, registration, stats, workout
 
 logging.basicConfig(level=logging.INFO)
 
@@ -17,6 +17,9 @@ dp = Dispatcher()
 def register_handlers() -> None:
     dp.include_router(registration.router)
     dp.include_router(menu.router)
+    dp.include_router(workout.router)
+    dp.include_router(stats.router)
+    dp.include_router(ai.router)
 
 
 async def main() -> None:

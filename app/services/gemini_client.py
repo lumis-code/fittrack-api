@@ -73,6 +73,8 @@ async def _post_prompt(prompt: str) -> str:
 
 async def analyze_workout(workout_summary: str) -> str:
     prompt = (
+        "Respond in Russian language only. Do not use markdown formatting (no asterisks, no bold, "
+        "no bullet points with *). Use plain text only, with line breaks and simple dashes (-) for lists if needed.\n\n"
         "You are a fitness coach. Analyze this workout and give brief, actionable feedback "
         "(form tips, intensity assessment, and one suggestion for the next session). "
         "Keep it under 150 words.\n\nWorkout details:\n"
@@ -82,8 +84,10 @@ async def analyze_workout(workout_summary: str) -> str:
 
 
 async def generate_weekly_plan(recent_workouts_summary: str, user_goal: str | None) -> str:
-    goal_text = f" Consider the user's goal: {user_goal}." if user_goal else ""
+    goal_text = f" Учитывайте цель пользователя: {user_goal}." if user_goal else ""
     prompt = (
+        "Respond in Russian language only. Do not use markdown formatting (no asterisks, no bold, "
+        "no bullet points with *). Use plain text only, with line breaks and simple dashes (-) for lists if needed.\n\n"
         "Create a balanced 7-day training plan across gym, run, and swim activities based on the recent "
         "workout history. Include a mix of recovery, endurance, and strength work, and keep the plan practical "
         f"for a real-world week.{goal_text}\n\nRecent workout history:\n{recent_workouts_summary}"
