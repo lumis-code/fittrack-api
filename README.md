@@ -199,4 +199,4 @@ curl -X POST https://fittrack-api-ww6w.onrender.com/ai/analyze/1 \
 
 ---
 
-Built by [**lumis-code**](https://github.com/lumis-code) as a backend course final project.
+Built by [**lumis-code**](https://github.com/lumis-code).
