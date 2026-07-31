@@ -44,6 +44,7 @@ Pygments==2.20.0
 pytest==9.1.1
 python-dotenv==1.2.2
 python-jose==3.5.0
+python-multipart==0.0.32
 rsa==4.9.1
 six==1.17.0
 SQLAlchemy==2.0.51
