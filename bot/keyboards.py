@@ -23,6 +23,7 @@ def workout_type_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="Зал", callback_data="type_gym")],
         [InlineKeyboardButton(text="Бег", callback_data="type_run")],
         [InlineKeyboardButton(text="Плавание", callback_data="type_swim")],
+        [InlineKeyboardButton(text="Велосипед", callback_data="type_cycling")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -37,6 +38,15 @@ def muscle_group_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="Пресс", callback_data="muscle_abs")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def add_more_exercise_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="➕ Добавить упражнение", callback_data="add_another_exercise")],
+            [InlineKeyboardButton(text="✅ Завершить зал", callback_data="finish_gym_exercises")],
+        ]
+    )
 
 
 def skip_button_keyboard(callback_data: str) -> InlineKeyboardMarkup:

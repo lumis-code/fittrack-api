@@ -5,7 +5,7 @@ import logging
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Contact, Message
+from aiogram.types import Contact, Message, ReplyKeyboardRemove
 
 from bot.keyboards import main_menu_keyboard, share_contact_keyboard
 from bot.services.api_client import ApiClientError, api_client
@@ -26,6 +26,7 @@ async def start_command(message: Message, state: FSMContext) -> None:
         return
 
     if telegram_id in REGISTERED_USERS:
+        await message.answer("✅", reply_markup=ReplyKeyboardRemove())
         await message.answer("С возвращением!", reply_markup=main_menu_keyboard())
         return
 
@@ -67,4 +68,5 @@ async def handle_contact(message: Message, state: FSMContext) -> None:
 
     REGISTERED_USERS[telegram_id] = backend_user_id
     await state.clear()
+    await message.answer("✅", reply_markup=ReplyKeyboardRemove())
     await message.answer("Регистрация завершена. Добро пожаловать в FitTrack!", reply_markup=main_menu_keyboard())

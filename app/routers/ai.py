@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
+from app.dependencies import get_current_user
 from app.models import AiInsight, User, Workout
 from app.schemas import AiInsightResponse
 from app.services.gemini_client import GeminiAPIError, analyze_workout, generate_weekly_plan
@@ -21,7 +22,7 @@ class WeeklyPlanRequest(BaseModel):
 
 
 @router.post("/analyze/{workout_id}", response_model=AiInsightResponse, status_code=status.HTTP_201_CREATED)
-async def analyze_workout_endpoint(workout_id: int, db: Session = Depends(get_db)) -> AiInsight:
+async def analyze_workout_endpoint(workout_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> AiInsight:
     workout = (
         db.query(Workout)
         .options(joinedload(Workout.gym_sets), joinedload(Workout.run_session), joinedload(Workout.swim_session))
@@ -30,6 +31,8 @@ async def analyze_workout_endpoint(workout_id: int, db: Session = Depends(get_db
     )
     if workout is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Workout with id {workout_id} was not found")
+    if workout.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your workout")
 
     summary = format_workout_summary(workout)
     try:
@@ -45,7 +48,10 @@ async def analyze_workout_endpoint(workout_id: int, db: Session = Depends(get_db
 
 
 @router.post("/weekly-plan", response_model=AiInsightResponse, status_code=status.HTTP_201_CREATED)
-async def generate_weekly_plan_endpoint(request: WeeklyPlanRequest, db: Session = Depends(get_db)) -> AiInsight:
+async def generate_weekly_plan_endpoint(request: WeeklyPlanRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> AiInsight:
+    if request.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to generate a plan for this user")
+
     user = db.query(User).filter(User.id == request.user_id).first()
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User with id {request.user_id} was not found")
@@ -76,7 +82,10 @@ async def generate_weekly_plan_endpoint(request: WeeklyPlanRequest, db: Session 
 
 
 @router.get("/insights/{user_id}", response_model=list[AiInsightResponse])
-def list_insights(user_id: int, db: Session = Depends(get_db)) -> list[AiInsight]:
+def list_insights(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> list[AiInsight]:
+    if user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view these insights")
+
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User with id {user_id} was not found")

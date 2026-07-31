@@ -8,7 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.models import GymSet, RunSession, SwimSession, User, Workout, WorkoutType
+from app.dependencies import get_current_user
+from app.models import CyclingSession, GymSet, RunSession, SwimSession, User, Workout, WorkoutType
 from app.schemas import WorkoutCreate, WorkoutResponse
 
 router = APIRouter(prefix="/workouts", tags=["workouts"])
@@ -25,18 +26,11 @@ class WorkoutUpdate(BaseModel):
 
 
 @router.post("/", response_model=WorkoutResponse, status_code=status.HTTP_201_CREATED)
-def create_workout(workout_data: WorkoutCreate, db: Session = Depends(get_db)) -> Workout:
+def create_workout(workout_data: WorkoutCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> Workout:
     """Create a workout and any sport-specific related rows in one transaction."""
-
-    user = db.query(User).filter(User.id == workout_data.user_id).first()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User with id {workout_data.user_id} was not found",
-        )
-
+    # Use the authenticated user as the owner; ignore any user_id passed in the payload
     workout = Workout(
-        user_id=workout_data.user_id,
+        user_id=current_user.id,
         type=WorkoutType(workout_data.type),
         date=workout_data.date,
         duration_min=workout_data.duration_min,
@@ -79,6 +73,16 @@ def create_workout(workout_data: WorkoutCreate, db: Session = Depends(get_db)) -
                     avg_heart_rate=workout_data.swim_session.avg_heart_rate,
                 )
             )
+        elif workout.type == WorkoutType.CYCLING:
+            db.add(
+                CyclingSession(
+                    workout_id=workout.id,
+                    distance_km=workout_data.cycling_session.distance_km,
+                    avg_speed_kmh=workout_data.cycling_session.avg_speed_kmh,
+                    elevation_m=workout_data.cycling_session.elevation_m,
+                    route_name=workout_data.cycling_session.route_name,
+                )
+            )
 
         db.commit()
         db.refresh(workout)
@@ -88,7 +92,7 @@ def create_workout(workout_data: WorkoutCreate, db: Session = Depends(get_db)) -
 
     return (
         db.query(Workout)
-        .options(joinedload(Workout.gym_sets), joinedload(Workout.run_session), joinedload(Workout.swim_session))
+        .options(joinedload(Workout.gym_sets), joinedload(Workout.run_session), joinedload(Workout.swim_session), joinedload(Workout.cycling_session))
         .filter(Workout.id == workout.id)
         .first()
     )
@@ -97,19 +101,22 @@ def create_workout(workout_data: WorkoutCreate, db: Session = Depends(get_db)) -
 @router.get("/", response_model=list[WorkoutResponse])
 def list_workouts(
     user_id: int | None = Query(default=None),
-    type: Literal["gym", "run", "swim"] | None = Query(default=None),
+    type: Literal["gym", "run", "swim", "cycling"] | None = Query(default=None),
     date_from: datetime | None = Query(default=None),
     date_to: datetime | None = Query(default=None),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
     db: Session = Depends(get_db),
-) -> list[Workout]:
+    current_user: User = Depends(get_current_user),
+    ) -> list[Workout]:
     """List workouts with optional filters and pagination."""
 
-    query = db.query(Workout).options(joinedload(Workout.gym_sets), joinedload(Workout.run_session), joinedload(Workout.swim_session))
+    query = db.query(Workout).options(joinedload(Workout.gym_sets), joinedload(Workout.run_session), joinedload(Workout.swim_session), joinedload(Workout.cycling_session))
 
-    if user_id is not None:
-        query = query.filter(Workout.user_id == user_id)
+    # Restrict list to the authenticated user's workouts
+    if user_id is not None and user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your workouts")
+    query = query.filter(Workout.user_id == current_user.id)
     if type is not None:
         query = query.filter(Workout.type == WorkoutType(type))
     if date_from is not None:
@@ -121,12 +128,12 @@ def list_workouts(
 
 
 @router.get("/{workout_id}", response_model=WorkoutResponse)
-def get_workout(workout_id: int, db: Session = Depends(get_db)) -> Workout:
+def get_workout(workout_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> Workout:
     """Fetch a single workout with nested data."""
 
     workout = (
         db.query(Workout)
-        .options(joinedload(Workout.gym_sets), joinedload(Workout.run_session), joinedload(Workout.swim_session))
+        .options(joinedload(Workout.gym_sets), joinedload(Workout.run_session), joinedload(Workout.swim_session), joinedload(Workout.cycling_session))
         .filter(Workout.id == workout_id)
         .first()
     )
@@ -135,6 +142,8 @@ def get_workout(workout_id: int, db: Session = Depends(get_db)) -> Workout:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Workout with id {workout_id} was not found",
         )
+    if workout.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your workout")
     return workout
 
 
@@ -143,6 +152,7 @@ def update_workout(
     workout_id: int,
     workout_update: WorkoutUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Workout:
     """Update top-level workout fields only."""
 
@@ -152,6 +162,8 @@ def update_workout(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Workout with id {workout_id} was not found",
         )
+    if workout.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your workout")
 
     update_data = workout_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -162,14 +174,14 @@ def update_workout(
 
     return (
         db.query(Workout)
-        .options(joinedload(Workout.gym_sets), joinedload(Workout.run_session), joinedload(Workout.swim_session))
+        .options(joinedload(Workout.gym_sets), joinedload(Workout.run_session), joinedload(Workout.swim_session), joinedload(Workout.cycling_session))
         .filter(Workout.id == workout.id)
         .first()
     )
 
 
 @router.delete("/{workout_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_workout(workout_id: int, db: Session = Depends(get_db)) -> None:
+def delete_workout(workout_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> None:
     """Delete a workout and let the database cascade the related rows."""
 
     workout = db.query(Workout).filter(Workout.id == workout_id).first()
@@ -178,6 +190,8 @@ def delete_workout(workout_id: int, db: Session = Depends(get_db)) -> None:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Workout with id {workout_id} was not found",
         )
+    if workout.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your workout")
 
     db.delete(workout)
     db.commit()

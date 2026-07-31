@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.schemas.cycling_session import CyclingSessionCreate, CyclingSessionResponse
 from app.schemas.gym_set import GymSetCreate, GymSetResponse
 from app.schemas.run_session import RunSessionCreate, RunSessionResponse
 from app.schemas.swim_session import SwimSessionCreate, SwimSessionResponse
@@ -13,7 +14,7 @@ from app.schemas.swim_session import SwimSessionCreate, SwimSessionResponse
 class WorkoutBase(BaseModel):
     """Shared workout fields."""
 
-    type: Literal["gym", "run", "swim"] = Field(..., description="Type of workout")
+    type: Literal["gym", "run", "swim", "cycling"] = Field(..., description="Type of workout")
     date: datetime = Field(..., description="Workout date and time")
     duration_min: int = Field(..., gt=0, description="Workout duration in minutes")
     notes: str | None = Field(default=None, description="Optional workout notes")
@@ -26,6 +27,7 @@ class WorkoutCreate(WorkoutBase):
     gym_sets: list[GymSetCreate] | None = Field(default=None, description="Gym sets for gym workouts")
     run_session: RunSessionCreate | None = Field(default=None, description="Running details for run workouts")
     swim_session: SwimSessionCreate | None = Field(default=None, description="Swimming details for swim workouts")
+    cycling_session: CyclingSessionCreate | None = Field(default=None, description="Cycling details for cycling workouts")
 
     @model_validator(mode="after")
     def validate_workout_payload(self) -> "WorkoutCreate":
@@ -38,6 +40,9 @@ class WorkoutCreate(WorkoutBase):
         elif self.type == "swim":
             if self.swim_session is None:
                 raise ValueError("swim workouts must include a swim_session payload")
+        elif self.type == "cycling":
+            if self.cycling_session is None:
+                raise ValueError("cycling workouts must include a cycling_session payload")
         return self
 
 
@@ -52,3 +57,4 @@ class WorkoutResponse(WorkoutBase):
     gym_sets: list[GymSetResponse] = []
     run_session: RunSessionResponse | None = None
     swim_session: SwimSessionResponse | None = None
+    cycling_session: CyclingSessionResponse | None = None

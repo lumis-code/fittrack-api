@@ -9,7 +9,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import RunSession, SwimSession, User, Workout
+from app.dependencies import get_current_user, get_current_admin_user
+from app.models import CyclingSession, RunSession, SwimSession, User, Workout
 
 router = APIRouter(tags=["analytics"])
 
@@ -47,8 +48,11 @@ class OverdueUserResponse(BaseModel):
 
 
 @router.get("/users/{user_id}/stats", response_model=UserStatsResponse)
-def get_user_stats(user_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+def get_user_stats(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> dict[str, Any]:
     """Return aggregate workout statistics for a user."""
+
+    if user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view these stats")
 
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
@@ -60,7 +64,7 @@ def get_user_stats(user_id: int, db: Session = Depends(get_db)) -> dict[str, Any
         .group_by(Workout.type)
         .all()
     )
-    breakdown_by_type = {"gym": 0, "run": 0, "swim": 0}
+    breakdown_by_type = {"gym": 0, "run": 0, "swim": 0, "cycling": 0}
     for workout_type, count in workout_counts:
         breakdown_by_type[workout_type.value if hasattr(workout_type, "value") else str(workout_type)] = count
 
@@ -87,18 +91,28 @@ def get_user_stats(user_id: int, db: Session = Depends(get_db)) -> dict[str, Any
         .scalar()
         or 0
     )
+    total_cycling_distance_km = (
+        db.query(func.coalesce(func.sum(CyclingSession.distance_km), 0))
+        .join(Workout, Workout.id == CyclingSession.workout_id)
+        .filter(Workout.user_id == user_id)
+        .scalar()
+        or 0
+    )
 
     return {
         "total_workouts": total_workouts,
         "total_duration_hours": round(total_duration_min / 60, 1),
-        "total_distance_km": round(total_run_distance_km + (total_swim_distance_km / 1000), 1),
+        "total_distance_km": round(total_run_distance_km + (total_swim_distance_km / 1000) + total_cycling_distance_km, 1),
         "breakdown_by_type": breakdown_by_type,
     }
 
 
 @router.get("/users/{user_id}/stats/weekly", response_model=list[WeeklyStatsResponse])
-def get_weekly_stats(user_id: int, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+def get_weekly_stats(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
     """Return weekly workout totals for the last 12 weeks."""
+
+    if user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view these stats")
 
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
@@ -130,7 +144,7 @@ def get_weekly_stats(user_id: int, db: Session = Depends(get_db)) -> list[dict[s
 
 
 @router.get("/workouts/overdue", response_model=list[OverdueUserResponse])
-def get_overdue_users(days: int = Query(default=7, ge=1), db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+def get_overdue_users(days: int = Query(default=7, ge=1), db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin_user)) -> list[dict[str, Any]]:
     """Return users whose last logged workout is older than the provided number of days."""
 
     now = datetime.now().astimezone()

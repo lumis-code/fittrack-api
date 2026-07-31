@@ -1,4 +1,5 @@
 from app.models.ai_insight import AiInsight
+from app.models.cycling_session import CyclingSession
 from app.models.gym_set import GymSet
 from app.models.run_session import RunSession
 from app.models.swim_session import SwimSession
@@ -7,6 +8,7 @@ from app.models.workout import Workout, WorkoutType
 
 __all__ = [
     "AiInsight",
+    "CyclingSession",
     "GymSet",
     "RunSession",
     "SwimSession",

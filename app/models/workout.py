@@ -16,6 +16,7 @@ class WorkoutType(str, Enum):
     GYM = "gym"
     RUN = "run"
     SWIM = "swim"
+    CYCLING = "cycling"
 
 
 class Workout(Base):
@@ -35,4 +36,5 @@ class Workout(Base):
     gym_sets: Mapped[list["GymSet"]] = relationship(back_populates="workout", cascade="all, delete-orphan")
     run_session: Mapped[Optional["RunSession"]] = relationship(back_populates="workout", uselist=False, cascade="all, delete-orphan")
     swim_session: Mapped[Optional["SwimSession"]] = relationship(back_populates="workout", uselist=False, cascade="all, delete-orphan")
+    cycling_session: Mapped[Optional["CyclingSession"]] = relationship(back_populates="workout", uselist=False, cascade="all, delete-orphan")
     ai_insights: Mapped[list["AiInsight"]] = relationship(back_populates="workout", cascade="all, delete-orphan")

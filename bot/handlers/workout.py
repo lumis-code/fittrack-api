@@ -8,6 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from bot.keyboards import (
+    add_more_exercise_keyboard,
     cancel_button_keyboard,
     main_menu_keyboard,
     muscle_group_keyboard,
@@ -58,6 +59,18 @@ async def choose_swim_type(callback: CallbackQuery, state: FSMContext) -> None:
     await safe_edit_text(
         callback.message,
         "Введите дистанцию плавания в метрах:",
+        reply_markup=cancel_button_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(WorkoutStates.choosing_type, F.data == "type_cycling")
+async def choose_cycling_type(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.update_data(workout_type="cycling")
+    await state.set_state(WorkoutStates.cycling_distance)
+    await safe_edit_text(
+        callback.message,
+        "Введите дистанцию поездки в километрах:",
         reply_markup=cancel_button_keyboard(),
     )
     await callback.answer()
@@ -142,9 +155,22 @@ async def gym_weight(message: Message, state: FSMContext) -> None:
         await message.answer("Пожалуйста, введите неотрицательное число.", reply_markup=cancel_button_keyboard())
         return
 
-    await state.update_data(weight_kg=weight_kg)
-    await state.set_state(WorkoutStates.common_duration)
-    await message.answer("Введите общую продолжительность тренировки в минутах:", reply_markup=cancel_button_keyboard())
+    data = await state.get_data()
+    gym_sets = data.get("gym_sets", []) or []
+    exercise = {
+        "exercise_name": data["exercise_name"],
+        "muscle_group": data["muscle_group"],
+        "sets": data["sets"],
+        "reps": data["reps"],
+        "weight_kg": weight_kg,
+    }
+    gym_sets.append(exercise)
+    await state.update_data(gym_sets=gym_sets)
+    await state.set_state(WorkoutStates.gym_add_more)
+    await message.answer(
+        "Добавить ещё одно упражнение?",
+        reply_markup=add_more_exercise_keyboard(),
+    )
 
 
 @router.message(WorkoutStates.run_distance)
@@ -210,6 +236,76 @@ async def run_elevation(message: Message, state: FSMContext) -> None:
         elevation_m = int(message.text.strip())
     except ValueError:
         await message.answer("Пожалуйста, введите целое число.", reply_markup=_with_cancel(skip_button_keyboard("skip_elevation")))
+        return
+
+    await state.update_data(elevation_m=elevation_m)
+    await state.set_state(WorkoutStates.common_duration)
+    await message.answer("Введите общую продолжительность тренировки в минутах:", reply_markup=cancel_button_keyboard())
+
+
+@router.message(WorkoutStates.cycling_distance)
+async def cycling_distance(message: Message, state: FSMContext) -> None:
+    if not message.text:
+        await message.answer("Пожалуйста, введите дистанцию числом.", reply_markup=cancel_button_keyboard())
+        return
+
+    try:
+        distance_km = float(message.text.strip())
+        if distance_km <= 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("Пожалуйста, введите положительное число.", reply_markup=cancel_button_keyboard())
+        return
+
+    await state.update_data(distance_km=distance_km)
+    await state.set_state(WorkoutStates.cycling_duration_time)
+    await message.answer("Введите длительность поездки в минутах:", reply_markup=cancel_button_keyboard())
+
+
+@router.message(WorkoutStates.cycling_duration_time)
+async def cycling_duration_time(message: Message, state: FSMContext) -> None:
+    if not message.text:
+        await message.answer("Пожалуйста, введите длительность числом.", reply_markup=cancel_button_keyboard())
+        return
+
+    try:
+        duration = int(message.text.strip())
+        if duration <= 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("Пожалуйста, введите положительное целое число.", reply_markup=cancel_button_keyboard())
+        return
+
+    await state.update_data(cycling_duration_min=duration)
+    await state.set_state(WorkoutStates.cycling_elevation)
+    await message.answer(
+        "Введите набор высоты в метрах или нажмите Пропустить:",
+        reply_markup=_with_cancel(skip_button_keyboard("skip_cycling_elevation")),
+    )
+
+
+@router.callback_query(WorkoutStates.cycling_elevation, F.data == "skip_cycling_elevation")
+async def cycling_elevation_skip(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.update_data(elevation_m=None)
+    await state.set_state(WorkoutStates.common_duration)
+    await safe_edit_text(
+        callback.message,
+        "Введите общую продолжительность тренировки в минутах:",
+        reply_markup=cancel_button_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.message(WorkoutStates.cycling_elevation)
+async def cycling_elevation(message: Message, state: FSMContext) -> None:
+    if not message.text:
+        await message.answer("Пожалуйста, введите набор высоты числом или нажмите Пропустить.", reply_markup=_with_cancel(skip_button_keyboard("skip_cycling_elevation")))
+        return
+
+    try:
+        elevation_m = int(message.text.strip())
+    except ValueError:
+        await message.answer("Пожалуйста, введите целое число.", reply_markup=_with_cancel(skip_button_keyboard("skip_cycling_elevation")))
         return
 
     await state.update_data(elevation_m=elevation_m)
@@ -346,6 +442,38 @@ async def common_notes_skip(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+@router.callback_query(WorkoutStates.gym_add_more, F.data == "add_another_exercise")
+async def gym_add_another_exercise(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    gym_sets = data.get("gym_sets", []) or []
+    await state.set_state(WorkoutStates.gym_exercise_name)
+    await state.update_data(
+        exercise_name=None,
+        muscle_group=None,
+        sets=None,
+        reps=None,
+        weight_kg=None,
+        gym_sets=gym_sets,
+    )
+    await safe_edit_text(
+        callback.message,
+        "Введите название упражнения:",
+        reply_markup=cancel_button_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(WorkoutStates.gym_add_more, F.data == "finish_gym_exercises")
+async def gym_finish_exercises(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(WorkoutStates.common_duration)
+    await safe_edit_text(
+        callback.message,
+        "Введите общую продолжительность тренировки в минутах:",
+        reply_markup=cancel_button_keyboard(),
+    )
+    await callback.answer()
+
+
 @router.message(WorkoutStates.common_notes)
 async def common_notes(message: Message, state: FSMContext) -> None:
     notes = message.text.strip() if message.text else None
@@ -382,15 +510,7 @@ async def _finalize_workout(event: CallbackQuery | Message, state: FSMContext) -
     }
 
     if workout_type == "gym":
-        payload["gym_sets"] = [
-            {
-                "exercise_name": data["exercise_name"],
-                "muscle_group": data["muscle_group"],
-                "sets": data["sets"],
-                "reps": data["reps"],
-                "weight_kg": data["weight_kg"],
-            }
-        ]
+        payload["gym_sets"] = data.get("gym_sets", []) or []
         payload["run_session"] = None
         payload["swim_session"] = None
     elif workout_type == "run":
@@ -413,6 +533,20 @@ async def _finalize_workout(event: CallbackQuery | Message, state: FSMContext) -
             "pool_length_m": data["pool_length_m"],
             "strokes": data.get("strokes"),
             "avg_heart_rate": data.get("avg_heart_rate"),
+        }
+        payload["cycling_session"] = None
+    elif workout_type == "cycling":
+        distance_km = data["distance_km"]
+        cycling_duration_min = data["cycling_duration_min"]
+        avg_speed_kmh = distance_km / (cycling_duration_min / 60) if cycling_duration_min > 0 else 0
+        payload["gym_sets"] = None
+        payload["run_session"] = None
+        payload["swim_session"] = None
+        payload["cycling_session"] = {
+            "distance_km": distance_km,
+            "avg_speed_kmh": avg_speed_kmh,
+            "elevation_m": data.get("elevation_m"),
+            "route_name": None,
         }
     else:
         if isinstance(event, CallbackQuery):
@@ -441,9 +575,10 @@ async def _finalize_workout(event: CallbackQuery | Message, state: FSMContext) -
         f"Длительность: {data['duration_min']} мин",
     ]
     if workout_type == "gym":
-        summary_lines.append(
-            f"Упражнение: {data['exercise_name']}, группа: {data['muscle_group']}, подходов: {data['sets']}, повторений: {data['reps']}, вес: {data['weight_kg']} кг"
-        )
+        for exercise in data.get("gym_sets", []) or []:
+            summary_lines.append(
+                f"Упражнение: {exercise['exercise_name']}, группа: {exercise['muscle_group']}, подходов: {exercise['sets']}, повторений: {exercise['reps']}, вес: {exercise['weight_kg']} кг"
+            )
     elif workout_type == "run":
         summary_lines.append(
             f"Дистанция: {data['distance_km']} км, средний темп: {payload['run_session']['avg_pace_min_km']:.2f} мин/км"
@@ -458,6 +593,12 @@ async def _finalize_workout(event: CallbackQuery | Message, state: FSMContext) -
             summary_lines.append(f"Гребков: {data['strokes']}")
         if data.get("avg_heart_rate") is not None:
             summary_lines.append(f"Пульс: {data['avg_heart_rate']}")
+    elif workout_type == "cycling":
+        summary_lines.append(
+            f"Дистанция: {data['distance_km']} км, средняя скорость: {payload['cycling_session']['avg_speed_kmh']:.2f} км/ч"
+        )
+        if data.get("elevation_m") is not None:
+            summary_lines.append(f"Набор высоты: {data['elevation_m']} м")
     if data.get("notes"):
         summary_lines.append(f"Заметки: {data['notes']}")
 

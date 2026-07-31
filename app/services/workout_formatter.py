@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.models.cycling_session import CyclingSession
 from app.models.gym_set import GymSet
 from app.models.run_session import RunSession
 from app.models.swim_session import SwimSession
@@ -52,6 +53,18 @@ def format_workout_summary(workout: Workout) -> str:
                 lines.append(f"- Avg heart rate: {swim_session.avg_heart_rate}")
         else:
             lines.append("- No swim session details recorded")
+    elif workout.type == WorkoutType.CYCLING:
+        cycling_session = workout.cycling_session
+        lines.append("Cycling details:")
+        if cycling_session:
+            lines.append(f"- Distance: {cycling_session.distance_km} km")
+            lines.append(f"- Avg speed: {cycling_session.avg_speed_kmh} km/h")
+            if cycling_session.elevation_m is not None:
+                lines.append(f"- Elevation: {cycling_session.elevation_m} m")
+            if cycling_session.route_name:
+                lines.append(f"- Route: {cycling_session.route_name}")
+        else:
+            lines.append("- No cycling session details recorded")
 
     return "\n".join(lines)
 

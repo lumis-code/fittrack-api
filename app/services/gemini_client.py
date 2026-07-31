@@ -15,7 +15,7 @@ class GeminiAPIError(Exception):
 
 MODEL_NAME = "gemini-3.5-flash-lite"
 API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent"
-TIMEOUT_SECONDS = 15.0
+TIMEOUT_SECONDS = 25.0
 
 
 def _get_api_key() -> str:
